@@ -14,3 +14,6 @@ dist/
 .env.local
 
 .DS_Store
+
+# Private working notes
+NOTES.md
