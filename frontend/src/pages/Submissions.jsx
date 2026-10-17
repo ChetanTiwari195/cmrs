@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { Figure, LoadingRows } from '@/components/Loading'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -11,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import api, { errorMessage, useApi } from '@/lib/api'
@@ -33,7 +35,7 @@ export default function Submissions() {
       <div className="space-y-2">
         <Label>Status</Label>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map((s) => (
               <SelectItem key={s} value={s}>{s === 'ALL' ? 'All statuses' : s}</SelectItem>
@@ -46,29 +48,30 @@ export default function Submissions() {
         <TableHeader>
           <TableRow>
             <TableHead>Ref</TableHead>
-            <TableHead>Submitted</TableHead>
+            <TableHead className="hidden md:table-cell">Submitted</TableHead>
             {!isAgent && <TableHead>Agent</TableHead>}
-            <TableHead className="text-right">Receipts</TableHead>
+            <TableHead className="hidden text-right lg:table-cell">Receipts</TableHead>
             <TableHead className="text-right">Expected</TableHead>
-            <TableHead className="text-right">Received</TableHead>
-            <TableHead className="text-right">Difference</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">Received</TableHead>
+            <TableHead className="hidden text-right sm:table-cell">Difference</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Remarks</TableHead>
             {user.role === 'BRANCH_MANAGER' && <TableHead />}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {submissions?.map((s) => (
+          {loading && <LoadingRows cols={isAgent ? 8 : 10} />}
+          {!loading && submissions?.map((s) => (
             <TableRow key={s.id}>
               <TableCell className="font-medium">{s.ref_no}</TableCell>
-              <TableCell>{formatDateTime(s.created_at)}</TableCell>
+              <TableCell className="hidden md:table-cell">{formatDateTime(s.created_at)}</TableCell>
               {!isAgent && <TableCell>{s.agent_name}</TableCell>}
-              <TableCell className="text-right">{s.collection_count}</TableCell>
+              <TableCell className="hidden text-right lg:table-cell">{s.collection_count}</TableCell>
               <TableCell className="text-right">{formatINR(s.expected_amount)}</TableCell>
-              <TableCell className="text-right">{formatINR(s.received_amount)}</TableCell>
-              <TableCell className={`text-right ${Number(s.difference) ? 'font-medium text-destructive' : ''}`}>{formatINR(s.difference)}</TableCell>
+              <TableCell className="hidden text-right sm:table-cell">{formatINR(s.received_amount)}</TableCell>
+              <TableCell className={`hidden text-right sm:table-cell ${Number(s.difference) ? 'font-medium text-destructive' : ''}`}>{formatINR(s.difference)}</TableCell>
               <TableCell><Badge variant={STATUS_VARIANT[s.status]}>{s.status}</Badge></TableCell>
-              <TableCell className="max-w-56 truncate" title={s.remarks}>{s.remarks || '—'}</TableCell>
+              <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">{s.remarks || '—'}</TableCell>
               {user.role === 'BRANCH_MANAGER' && (
                 <TableCell className="text-right">
                   {s.status === 'PENDING' && <Button size="sm" onClick={() => setReviewing(s)}>Review</Button>}
@@ -92,9 +95,11 @@ export default function Submissions() {
 }
 
 function CashInHand({ onSubmitted }) {
-  const { data, reload } = useApi('/collections/?status=COLLECTED')
+  const { data, loading, reload } = useApi('/collections/?status=COLLECTED')
+  const [submitting, setSubmitting] = useState(false)
 
   async function submit() {
+    setSubmitting(true)
     try {
       const { data: submission } = await api.post('/submissions/')
       toast.success(`Submitted ${formatINR(submission.expected_amount)} to the branch (${submission.ref_no}).`)
@@ -102,6 +107,8 @@ function CashInHand({ onSubmitted }) {
       onSubmitted()
     } catch (err) {
       toast.error(errorMessage(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -109,10 +116,12 @@ function CashInHand({ onSubmitted }) {
     <Card className="md:max-w-md">
       <CardHeader>
         <CardDescription>Cash in hand · {data?.count ?? 0} receipts</CardDescription>
-        <CardTitle className="text-2xl">{formatINR(data?.total)}</CardTitle>
+        <CardTitle className="text-2xl"><Figure loading={loading}>{formatINR(data?.total)}</Figure></CardTitle>
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button className="mt-2 w-fit" disabled={!data?.count}>Submit cash to branch</Button>
+            <Button className="mt-2 w-full sm:w-fit" disabled={!data?.count || submitting}>
+              {submitting && <Spinner />} Submit cash to branch
+            </Button>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -176,7 +185,7 @@ function ReviewDialog({ submission, onClose, onDone }) {
         </div>
         <DialogFooter>
           <Button variant="destructive" disabled={busy} onClick={() => act('reject')}>Reject</Button>
-          <Button disabled={busy || received === ''} onClick={() => act('approve')}>Approve</Button>
+          <Button disabled={busy || received === ''} onClick={() => act('approve')}>{busy && <Spinner />} Approve</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

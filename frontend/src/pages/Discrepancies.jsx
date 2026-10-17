@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { LoadingRows } from '@/components/Loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import api, { errorMessage, useApi } from '@/lib/api'
@@ -22,7 +24,7 @@ export default function Discrepancies() {
       <div className="space-y-2">
         <Label>Status</Label>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="OPEN">Open</SelectItem>
             <SelectItem value="RESOLVED">Resolved</SelectItem>
@@ -47,7 +49,8 @@ export default function Discrepancies() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data?.map((d) => (
+          {loading && <LoadingRows cols={10} />}
+          {!loading && data?.map((d) => (
             <TableRow key={d.id}>
               <TableCell>{formatDateTime(d.created_at)}</TableCell>
               <TableCell><Badge variant="outline">{label(d.type)}</Badge></TableCell>
@@ -56,7 +59,10 @@ export default function Discrepancies() {
               <TableCell className="text-right">{formatINR(d.expected)}</TableCell>
               <TableCell className="text-right">{formatINR(d.actual)}</TableCell>
               <TableCell className="text-right font-medium text-destructive">{formatINR(d.difference)}</TableCell>
-              <TableCell className="max-w-56 truncate" title={d.resolution_note || d.note}>{d.resolution_note || d.note}</TableCell>
+              <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">
+                {d.note}
+                {d.resolution_note && <p className="mt-1 text-muted-foreground">Resolved: {d.resolution_note}</p>}
+              </TableCell>
               <TableCell><Badge variant={STATUS_VARIANT[d.status]}>{d.status}</Badge></TableCell>
               <TableCell className="text-right">
                 {d.status === 'OPEN' && <Button size="sm" variant="outline" onClick={() => setResolving(d)}>Resolve</Button>}
@@ -77,14 +83,19 @@ export default function Discrepancies() {
 }
 
 function ResolveDialog({ discrepancy, onClose, onDone }) {
+  const [saving, setSaving] = useState(false)
+
   async function onSubmit(e) {
     e.preventDefault()
+    setSaving(true)
     try {
       await api.post(`/discrepancies/${discrepancy.id}/resolve/`, Object.fromEntries(new FormData(e.currentTarget)))
       toast.success('Discrepancy resolved.')
       onDone()
     } catch (err) {
       toast.error(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -102,7 +113,7 @@ function ResolveDialog({ discrepancy, onClose, onDone }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Mark resolved</Button>
+            <Button type="submit" disabled={saving}>{saving && <Spinner />} Mark resolved</Button>
           </DialogFooter>
         </form>
       </DialogContent>

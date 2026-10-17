@@ -56,16 +56,18 @@ export function errorMessage(error) {
 export default api
 
 export function useApi(url) {
-  const [state, setState] = useState({ data: null, loading: true, error: null })
   const [version, setVersion] = useState(0)
+  const key = `${url}#${version}`
+  const [state, setState] = useState({ key: null, data: null, error: null })
 
   useEffect(() => {
     let active = true
     api.get(url)
-      .then((res) => active && setState({ data: res.data, loading: false, error: null }))
-      .catch((error) => active && setState({ data: null, loading: false, error: errorMessage(error) }))
+      .then((res) => active && setState({ key, data: res.data, error: null }))
+      .catch((error) => active && setState({ key, data: null, error: errorMessage(error) }))
     return () => { active = false }
-  }, [url, version])
+  }, [url, key])
 
-  return { ...state, reload: () => setVersion((v) => v + 1) }
+  // Loading until the response for the current url (and reload) arrives, so filter changes show loaders too.
+  return { data: state.data, error: state.error, loading: state.key !== key, reload: () => setVersion((v) => v + 1) }
 }

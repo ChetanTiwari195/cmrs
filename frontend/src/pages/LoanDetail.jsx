@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { LoadingRows, PageLoader } from '@/components/Loading'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import api, { errorMessage, useApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -17,11 +19,11 @@ export default function LoanDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const { data: loan, error, reload } = useApi(`/loans/${id}/`)
-  const { data: history, reload: reloadHistory } = useApi(`/collections/?loan=${id}`)
+  const { data: history, loading: historyLoading, reload: reloadHistory } = useApi(`/collections/?loan=${id}`)
   const [collecting, setCollecting] = useState(false)
 
   if (error) return <p className="text-muted-foreground">{error}</p>
-  if (!loan) return null
+  if (!loan) return <PageLoader />
 
   const stats = [
     ['Principal', loan.principal],
@@ -46,17 +48,17 @@ export default function LoanDetail() {
             </p>
           </div>
           {user.role === 'AGENT' && loan.status === 'ACTIVE' && (
-            <Button onClick={() => setCollecting(true)}>Collect payment</Button>
+            <Button className="w-full sm:w-auto" onClick={() => setCollecting(true)}>Collect payment</Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
         {stats.map(([name, value]) => (
           <Card key={name}>
             <CardHeader>
               <CardDescription>{name}</CardDescription>
-              <CardTitle className="text-lg">{formatINR(value)}</CardTitle>
+              <CardTitle className="text-base md:text-lg">{formatINR(value)}</CardTitle>
             </CardHeader>
           </Card>
         ))}
@@ -97,23 +99,24 @@ export default function LoanDetail() {
           <TableHeader>
             <TableRow>
               <TableHead>Receipt</TableHead>
-              <TableHead>Collected at</TableHead>
-              <TableHead>Agent</TableHead>
+              <TableHead className="hidden sm:table-cell">Collected at</TableHead>
+              <TableHead className="hidden md:table-cell">Agent</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {history?.results.map((c) => (
+            {historyLoading && <LoadingRows cols={5} rows={2} />}
+            {!historyLoading && history?.results.map((c) => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium">{c.receipt_no}</TableCell>
-                <TableCell>{formatDateTime(c.collected_at)}</TableCell>
-                <TableCell>{c.agent_name}</TableCell>
+                <TableCell className="hidden sm:table-cell">{formatDateTime(c.collected_at)}</TableCell>
+                <TableCell className="hidden md:table-cell">{c.agent_name}</TableCell>
                 <TableCell className="text-right">{formatINR(c.amount)}</TableCell>
                 <TableCell><Badge variant={STATUS_VARIANT[c.status]}>{label(c.status)}</Badge></TableCell>
               </TableRow>
             ))}
-            {history && !history.results.length && (
+            {!historyLoading && history && !history.results.length && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">No repayments yet.</TableCell>
               </TableRow>
@@ -201,7 +204,7 @@ function CollectDialog({ loan, onClose, onCollected }) {
             )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Record payment'}</Button>
+              <Button type="submit" disabled={submitting}>{submitting && <Spinner />} Record payment</Button>
             </DialogFooter>
           </form>
         )}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import { errorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 
@@ -45,7 +46,7 @@ export default function Login() {
               <Input id="password" name="password" type="password" autoComplete="current-password" required />
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Signing in…' : 'Sign in'}
+              {submitting && <Spinner />} Sign in
             </Button>
           </form>
         </CardContent>

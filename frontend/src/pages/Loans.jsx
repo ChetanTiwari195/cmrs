@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
+import { LoadingRows } from '@/components/Loading'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import api, { errorMessage, useApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -30,23 +32,24 @@ export default function Loans() {
           <TableRow>
             <TableHead>Loan no.</TableHead>
             <TableHead>Customer</TableHead>
-            <TableHead>Disbursed</TableHead>
-            <TableHead className="text-right">Principal</TableHead>
-            <TableHead className="text-right">Total payable</TableHead>
+            <TableHead className="hidden md:table-cell">Disbursed</TableHead>
+            <TableHead className="hidden text-right md:table-cell">Principal</TableHead>
+            <TableHead className="hidden text-right lg:table-cell">Total payable</TableHead>
             <TableHead className="text-right">Outstanding</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="hidden sm:table-cell">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loans?.map((l) => (
+          {loading && <LoadingRows cols={7} />}
+          {!loading && loans?.map((l) => (
             <TableRow key={l.id} className="cursor-pointer" onClick={() => navigate(`/loans/${l.id}`)}>
               <TableCell className="font-medium">{l.loan_no}</TableCell>
               <TableCell>{l.customer_name}</TableCell>
-              <TableCell>{formatDate(l.disbursed_on)}</TableCell>
-              <TableCell className="text-right">{formatINR(l.principal)}</TableCell>
-              <TableCell className="text-right">{formatINR(l.total_payable)}</TableCell>
+              <TableCell className="hidden md:table-cell">{formatDate(l.disbursed_on)}</TableCell>
+              <TableCell className="hidden text-right md:table-cell">{formatINR(l.principal)}</TableCell>
+              <TableCell className="hidden text-right lg:table-cell">{formatINR(l.total_payable)}</TableCell>
               <TableCell className="text-right">{formatINR(l.outstanding)}</TableCell>
-              <TableCell><Badge variant={STATUS_VARIANT[l.status]}>{l.status}</Badge></TableCell>
+              <TableCell className="hidden sm:table-cell"><Badge variant={STATUS_VARIANT[l.status]}>{l.status}</Badge></TableCell>
             </TableRow>
           ))}
           {!loading && !loans?.length && (
@@ -67,15 +70,19 @@ export default function Loans() {
 function NewLoanDialog({ onClose, onSaved }) {
   const { data: customers } = useApi('/customers/')
   const today = todayISO()
+  const [saving, setSaving] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
+    setSaving(true)
     try {
       const { data } = await api.post('/loans/', Object.fromEntries(new FormData(e.currentTarget)))
       toast.success(`Loan ${data.loan_no} created.`)
       onSaved(data)
     } catch (err) {
       toast.error(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -97,7 +104,7 @@ function NewLoanDialog({ onClose, onSaved }) {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="principal">Principal (₹)</Label>
               <Input id="principal" name="principal" type="number" min="1" step="0.01" required />
@@ -117,7 +124,7 @@ function NewLoanDialog({ onClose, onSaved }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Create loan</Button>
+            <Button type="submit" disabled={saving}>{saving && <Spinner />} Create loan</Button>
           </DialogFooter>
         </form>
       </DialogContent>

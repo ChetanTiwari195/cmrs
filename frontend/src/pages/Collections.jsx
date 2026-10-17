@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { Figure, LoadingRows } from '@/components/Loading'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/lib/auth'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +13,8 @@ import { formatDateTime, formatINR, label, STATUS_VARIANT, todayISO } from '@/li
 const STATUSES = ['COLLECTED', 'SUBMITTED', 'BRANCH_RECEIVED', 'DEPOSITED', 'SETTLED']
 
 export default function Collections() {
+  const { user } = useAuth()
+  const isAgent = user.role === 'AGENT'
   const [filters, setFilters] = useState({ date_from: todayISO(), date_to: todayISO(), status: 'ALL' })
   const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v && v !== 'ALL'))
   const { data, loading, error } = useApi(`/collections/?${params}`)
@@ -20,7 +24,7 @@ export default function Collections() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Collections</h1>
 
-      <div className="flex flex-wrap items-end gap-4">
+      <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap sm:gap-4">
         <div className="space-y-2">
           <Label htmlFor="date_from">From</Label>
           <Input id="date_from" type="date" value={filters.date_from} onChange={set('date_from')} />
@@ -29,10 +33,10 @@ export default function Collections() {
           <Label htmlFor="date_to">To</Label>
           <Input id="date_to" type="date" value={filters.date_to} onChange={set('date_to')} />
         </div>
-        <div className="space-y-2">
+        <div className="col-span-2 space-y-2">
           <Label>Status</Label>
           <Select value={filters.status} onValueChange={set('status')}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
               {STATUSES.map((s) => <SelectItem key={s} value={s}>{label(s)}</SelectItem>)}
@@ -41,17 +45,17 @@ export default function Collections() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 md:max-w-md">
+      <div className="grid grid-cols-2 gap-3 md:max-w-md md:gap-4">
         <Card>
           <CardHeader>
             <CardDescription>Total collected</CardDescription>
-            <CardTitle className="text-lg">{formatINR(data?.total)}</CardTitle>
+            <CardTitle className="text-lg"><Figure loading={loading}>{formatINR(data?.total)}</Figure></CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
             <CardDescription>Receipts</CardDescription>
-            <CardTitle className="text-lg">{data?.count ?? '—'}</CardTitle>
+            <CardTitle className="text-lg"><Figure loading={loading}>{data?.count ?? '—'}</Figure></CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -60,24 +64,25 @@ export default function Collections() {
         <TableHeader>
           <TableRow>
             <TableHead>Receipt</TableHead>
-            <TableHead>Collected at</TableHead>
+            <TableHead className="hidden md:table-cell">Collected at</TableHead>
             <TableHead>Customer</TableHead>
-            <TableHead>Loan</TableHead>
-            <TableHead>Agent</TableHead>
+            <TableHead className="hidden lg:table-cell">Loan</TableHead>
+            {!isAgent && <TableHead className="hidden md:table-cell">Agent</TableHead>}
             <TableHead className="text-right">Amount</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="hidden sm:table-cell">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data?.results.map((c) => (
+          {loading && <LoadingRows cols={isAgent ? 6 : 7} />}
+          {!loading && data?.results.map((c) => (
             <TableRow key={c.id}>
               <TableCell className="font-medium">{c.receipt_no}</TableCell>
-              <TableCell>{formatDateTime(c.collected_at)}</TableCell>
+              <TableCell className="hidden md:table-cell">{formatDateTime(c.collected_at)}</TableCell>
               <TableCell>{c.customer_name}</TableCell>
-              <TableCell>{c.loan_no}</TableCell>
-              <TableCell>{c.agent_name}</TableCell>
+              <TableCell className="hidden lg:table-cell">{c.loan_no}</TableCell>
+              {!isAgent && <TableCell className="hidden md:table-cell">{c.agent_name}</TableCell>}
               <TableCell className="text-right">{formatINR(c.amount)}</TableCell>
-              <TableCell><Badge variant={STATUS_VARIANT[c.status]}>{label(c.status)}</Badge></TableCell>
+              <TableCell className="hidden sm:table-cell"><Badge variant={STATUS_VARIANT[c.status]}>{label(c.status)}</Badge></TableCell>
             </TableRow>
           ))}
           {!loading && !data?.results.length && (

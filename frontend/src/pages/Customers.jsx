@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { LoadingRows } from '@/components/Loading'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Spinner } from '@/components/ui/spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
@@ -29,20 +31,21 @@ export default function Customers() {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Phone</TableHead>
-            <TableHead>Address</TableHead>
-            <TableHead>Agent</TableHead>
-            <TableHead>Branch</TableHead>
+            <TableHead className="hidden md:table-cell">Address</TableHead>
+            <TableHead className="hidden sm:table-cell">Agent</TableHead>
+            <TableHead className="hidden md:table-cell">Branch</TableHead>
             {isAdmin && <TableHead />}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {customers?.map((c) => (
+          {loading && <LoadingRows cols={isAdmin ? 6 : 5} />}
+          {!loading && customers?.map((c) => (
             <TableRow key={c.id}>
               <TableCell className="font-medium">{c.name}</TableCell>
               <TableCell>{c.phone}</TableCell>
-              <TableCell className="max-w-64 truncate">{c.address || '—'}</TableCell>
-              <TableCell>{c.agent_name}</TableCell>
-              <TableCell>{c.branch_name}</TableCell>
+              <TableCell className="hidden min-w-48 whitespace-normal md:table-cell">{c.address || '—'}</TableCell>
+              <TableCell className="hidden sm:table-cell">{c.agent_name}</TableCell>
+              <TableCell className="hidden md:table-cell">{c.branch_name}</TableCell>
               {isAdmin && (
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Edit</Button>
@@ -68,10 +71,12 @@ export default function Customers() {
 function CustomerDialog({ customer, onClose, onSaved }) {
   const { data: agents } = useApi('/agents/')
   const isEdit = Boolean(customer?.id)
+  const [saving, setSaving] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
     const body = Object.fromEntries(new FormData(e.currentTarget))
+    setSaving(true)
     try {
       if (isEdit) await api.patch(`/customers/${customer.id}/`, body)
       else await api.post('/customers/', body)
@@ -79,6 +84,8 @@ function CustomerDialog({ customer, onClose, onSaved }) {
       onSaved()
     } catch (err) {
       toast.error(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -114,7 +121,7 @@ function CustomerDialog({ customer, onClose, onSaved }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit" disabled={saving}>{saving && <Spinner />} Save</Button>
           </DialogFooter>
         </form>
       </DialogContent>

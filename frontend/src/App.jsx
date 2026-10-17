@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import AppLayout from '@/components/AppLayout'
+import { PageLoader } from '@/components/Loading'
 import { useAuth } from '@/lib/auth'
 import { NAV } from '@/lib/nav'
 import Collections from '@/pages/Collections'
@@ -26,7 +27,7 @@ const PAGES = {
 export default function App() {
   const { user, loading } = useAuth()
 
-  if (loading) return null
+  if (loading) return <PageLoader fullScreen />
 
   return (
     <BrowserRouter>

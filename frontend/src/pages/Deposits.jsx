@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { Figure, LoadingRows } from '@/components/Loading'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import api, { errorMessage, useApi } from '@/lib/api'
@@ -31,7 +33,7 @@ export default function Deposits() {
       <div className="space-y-2">
         <Label>Status</Label>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             {['ALL', 'PENDING', 'SETTLED', 'FAILED'].map((s) => (
               <SelectItem key={s} value={s}>{s === 'ALL' ? 'All statuses' : s}</SelectItem>
@@ -56,12 +58,13 @@ export default function Deposits() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {deposits?.map((d) => (
+          {loading && <LoadingRows cols={isFinance ? 10 : 9} />}
+          {!loading && deposits?.map((d) => (
             <TableRow key={d.id}>
               <TableCell>{formatDate(d.deposit_date)}</TableCell>
               <TableCell>{d.branch_name}</TableCell>
               <TableCell className="font-medium">{d.bank_name} · {d.reference}</TableCell>
-              <TableCell className="max-w-40 truncate" title={d.submission_refs.join(', ')}>{d.submission_refs.join(', ')}</TableCell>
+              <TableCell className="min-w-32 whitespace-normal">{d.submission_refs.join(', ')}</TableCell>
               <TableCell className="text-right">{formatINR(d.amount)}</TableCell>
               <TableCell className="text-right">{formatINR(d.settled_amount)}</TableCell>
               <TableCell className={`text-right ${Number(d.difference) ? 'font-medium text-destructive' : ''}`}>{formatINR(d.difference)}</TableCell>
@@ -69,7 +72,7 @@ export default function Deposits() {
                 <Badge variant={STATUS_VARIANT[d.status]}>{d.status}</Badge>
                 {d.is_delayed && <Badge variant="destructive" className="ml-1">DELAYED</Badge>}
               </TableCell>
-              <TableCell className="max-w-48 truncate" title={d.remarks}>{d.remarks || '—'}</TableCell>
+              <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">{d.remarks || '—'}</TableCell>
               {isFinance && (
                 <TableCell className="space-x-2 text-right whitespace-nowrap">
                   {d.status === 'PENDING' && (
@@ -98,13 +101,15 @@ export default function Deposits() {
 }
 
 function ReadyToDeposit({ onDeposited }) {
-  const { data, reload } = useApi('/deposits/eligible/')
+  const { data, loading, reload } = useApi('/deposits/eligible/')
   const [open, setOpen] = useState(false)
   const [error, setError] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
     setError(null)
+    setSaving(true)
     try {
       const { data: deposit } = await api.post('/deposits/', Object.fromEntries(new FormData(e.currentTarget)))
       toast.success(`Deposit ${deposit.reference} recorded.`)
@@ -113,6 +118,8 @@ function ReadyToDeposit({ onDeposited }) {
       onDeposited()
     } catch (err) {
       setError(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -120,8 +127,8 @@ function ReadyToDeposit({ onDeposited }) {
     <Card className="md:max-w-md">
       <CardHeader>
         <CardDescription>Reconciled cash ready to deposit · {data?.count ?? 0} submissions</CardDescription>
-        <CardTitle className="text-2xl">{formatINR(data?.total)}</CardTitle>
-        <Button className="mt-2 w-fit" disabled={!data?.count} onClick={() => { setError(null); setOpen(true) }}>Record bank deposit</Button>
+        <CardTitle className="text-2xl"><Figure loading={loading}>{formatINR(data?.total)}</Figure></CardTitle>
+        <Button className="mt-2 w-full sm:w-fit" disabled={!data?.count} onClick={() => { setError(null); setOpen(true) }}>Record bank deposit</Button>
       </CardHeader>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -133,7 +140,7 @@ function ReadyToDeposit({ onDeposited }) {
             <p className="text-sm text-muted-foreground">
               Covers {data?.refs.join(', ')}. The amount must match the reconciled total of {formatINR(data?.total)}.
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="bank_name">Bank</Label>
                 <Input id="bank_name" name="bank_name" placeholder="HDFC Bank" required />
@@ -159,7 +166,7 @@ function ReadyToDeposit({ onDeposited }) {
             )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit">Record deposit</Button>
+              <Button type="submit" disabled={saving}>{saving && <Spinner />} Record deposit</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -170,15 +177,19 @@ function ReadyToDeposit({ onDeposited }) {
 
 function SettlementDialog({ type, deposit, onClose, onDone }) {
   const settling = type === 'settle'
+  const [saving, setSaving] = useState(false)
 
   async function onSubmit(e) {
     e.preventDefault()
+    setSaving(true)
     try {
       await api.post(`/deposits/${deposit.id}/${type}/`, Object.fromEntries(new FormData(e.currentTarget)))
       toast.success(settling ? 'Deposit settled.' : 'Deposit marked as failed. The cash is back with the branch.')
       onDone()
     } catch (err) {
       toast.error(errorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -193,7 +204,7 @@ function SettlementDialog({ type, deposit, onClose, onDone }) {
             {deposit.branch_name} deposited {formatINR(deposit.amount)} into {deposit.bank_name} on {formatDate(deposit.deposit_date)}.
           </p>
           {settling && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="settled_amount">Amount credited (₹)</Label>
                 <Input id="settled_amount" name="settled_amount" type="number" min="0" step="0.01" defaultValue={deposit.amount} required />
@@ -210,7 +221,9 @@ function SettlementDialog({ type, deposit, onClose, onDone }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" variant={settling ? 'default' : 'destructive'}>{settling ? 'Settle' : 'Mark failed'}</Button>
+            <Button type="submit" variant={settling ? 'default' : 'destructive'} disabled={saving}>
+              {saving && <Spinner />} {settling ? 'Settle' : 'Mark failed'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
