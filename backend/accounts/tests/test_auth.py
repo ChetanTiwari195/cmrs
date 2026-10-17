@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.test import TestCase
@@ -13,6 +14,9 @@ class AuthTests(TestCase):
     def setUpTestData(cls):
         call_command("seed_demo", stdout=open("/dev/null", "w"))
 
+    def setUp(self):
+        cache.clear()  # reset the login rate limit between tests
+
     def login(self, username, password="Demo@12345"):
         return self.client.post("/api/v1/auth/login/", {"username": username, "password": password})
 
@@ -24,6 +28,10 @@ class AuthTests(TestCase):
 
     def test_login_wrong_password(self):
         self.assertEqual(self.login("agent_blr", "wrong").status_code, 401)
+
+    def test_login_is_rate_limited(self):
+        codes = [self.login("agent_blr", "wrong").status_code for _ in range(11)]
+        self.assertEqual(codes[-1], 429)
 
     def test_me_requires_auth(self):
         self.assertEqual(self.client.get("/api/v1/auth/me/").status_code, 401)

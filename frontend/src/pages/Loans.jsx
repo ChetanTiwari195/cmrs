@@ -15,7 +15,7 @@ import { formatDate, formatINR, STATUS_VARIANT, todayISO } from '@/lib/utils'
 export default function Loans() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { data: loans, loading, error, reload } = useApi('/loans/')
+  const { data: loans, loading, error } = useApi('/loans/')
   const [creating, setCreating] = useState(false)
 
   return (

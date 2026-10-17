@@ -78,7 +78,7 @@ class ApiTests(TestCase):
         loan = Loan.objects.get(customer__phone="9800000003")
         res = self.client_for("finance").get(f"/api/v1/loans/{loan.id}/")
         self.assertEqual(len(res.data["installments"]), 6)
-        self.assertEqual(res.data["amount_paid"], "0.00")
+        self.assertEqual(res.data["amount_paid"], "8250.00")  # seeded collections: 5250 + 3000
 
     def test_admin_creates_customer_in_agent_branch(self):
         agent = User.objects.get(username="agent_mum")
