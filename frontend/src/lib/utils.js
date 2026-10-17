@@ -6,3 +6,16 @@ const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' 
 export const formatINR = (value) => (value == null ? '—' : inr.format(value))
 
 export const formatDate = (value) => (value ? new Date(value).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—')
+
+export const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—')
+
+// YYYY-MM-DD in local time, for <input type="date"> and API filters.
+export const todayISO = () => new Date().toLocaleDateString('en-CA')
+
+export const STATUS_VARIANT = {
+  ACTIVE: 'default', CLOSED: 'secondary',
+  PAID: 'default', PARTIAL: 'secondary', PENDING: 'outline',
+  COLLECTED: 'outline', SUBMITTED: 'secondary', BRANCH_RECEIVED: 'secondary', DEPOSITED: 'secondary', SETTLED: 'default',
+}
+
+export const label = (status) => status.replaceAll('_', ' ')

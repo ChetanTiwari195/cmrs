@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import api, { errorMessage, useApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { formatDate, formatINR } from '@/lib/utils'
+import { formatDate, formatINR, STATUS_VARIANT, todayISO } from '@/lib/utils'
 
 export default function Loans() {
   const { user } = useAuth()
@@ -46,7 +46,7 @@ export default function Loans() {
               <TableCell className="text-right">{formatINR(l.principal)}</TableCell>
               <TableCell className="text-right">{formatINR(l.total_payable)}</TableCell>
               <TableCell className="text-right">{formatINR(l.outstanding)}</TableCell>
-              <TableCell><Badge variant={l.status === 'ACTIVE' ? 'default' : 'secondary'}>{l.status}</Badge></TableCell>
+              <TableCell><Badge variant={STATUS_VARIANT[l.status]}>{l.status}</Badge></TableCell>
             </TableRow>
           ))}
           {!loading && !loans?.length && (
@@ -66,7 +66,7 @@ export default function Loans() {
 
 function NewLoanDialog({ onClose, onSaved }) {
   const { data: customers } = useApi('/customers/')
-  const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD in local time
+  const today = todayISO()
 
   async function onSubmit(e) {
     e.preventDefault()

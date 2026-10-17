@@ -2,13 +2,14 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import AppLayout from '@/components/AppLayout'
 import { useAuth } from '@/lib/auth'
 import { NAV } from '@/lib/nav'
+import Collections from '@/pages/Collections'
 import Customers from '@/pages/Customers'
 import LoanDetail from '@/pages/LoanDetail'
 import Loans from '@/pages/Loans'
 import Login from '@/pages/Login'
 import Placeholder from '@/pages/Placeholder'
 
-const PAGES = { '/customers': Customers, '/loans': Loans }
+const PAGES = { '/customers': Customers, '/loans': Loans, '/collections': Collections }
 
 export default function App() {
   const { user, loading } = useAuth()

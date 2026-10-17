@@ -100,6 +100,9 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | GET, POST | `/loans/` | List with `amount_paid` and `outstanding` / create with auto-generated schedule (admin) |
 | GET | `/loans/{id}/` | Loan detail with its installments |
 
+| GET, POST | `/collections/` | List with `total` and `count` (filters: `date_from`, `date_to`, `status`, `loan`, `agent`) / record a cash repayment (agent) |
+| GET | `/collections/{id}/` | Collection with its receipt number |
+
 **Visibility:** agents see only their assigned customers and their loans, branch managers see their branch, and admin and finance see everything. Out-of-scope records return 404.
 
 ## Database
@@ -113,7 +116,16 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | `lending_loan` | Loans: principal, flat annual rate, tenure, `total_interest`, `total_payable`, status. Loan number is `LN` + zero-padded id |
 | `lending_installment` | EMI schedule: `seq`, `due_date`, `amount_due`, `amount_paid`, status. `UNIQUE(loan, seq)`, `CHECK 0 <= amount_paid <= amount_due` |
 
+| `cash_collection` | Cash repayments: loan, agent, amount, status (`COLLECTED → SUBMITTED → BRANCH_RECEIVED → DEPOSITED → SETTLED`), `idempotency_key` unique. Receipt number is `RC` + date + id |
+
 All money columns are `NUMERIC(14,2)`.
+
+### Collection rules
+
+- The payment goes to the oldest unpaid EMI first, and anything extra goes to the next EMIs. A loan is closed when it's fully paid.
+- **Over-collection:** an amount above the total outstanding is rejected, and the error states the excess.
+- **Duplicate collection:** each payment form sends a unique `idempotency_key`, and a retry returns the original receipt (`200`) instead of creating a second payment.
+- Only the customer's assigned agent can collect. Collections can never be edited or deleted (`405`).
 
 ### Loan schedule (flat interest)
 
