@@ -103,6 +103,12 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | GET, POST | `/collections/` | List with `total` and `count` (filters: `date_from`, `date_to`, `status`, `loan`, `agent`) / record a cash repayment (agent) |
 | GET | `/collections/{id}/` | Collection with its receipt number |
 
+| GET, POST | `/submissions/` | List (filters: `status`, `agent`, `branch`) / submit all cash in hand to the branch (agent) |
+| POST | `/submissions/{id}/approve/` | `{received_amount, remarks}`. A difference creates a discrepancy, and remarks are then required (branch manager) |
+| POST | `/submissions/{id}/reject/` | `{remarks}`. The cash goes back to the agent, who can resubmit (branch manager) |
+| GET | `/discrepancies/` | List (filters: `status`, `type`, `branch`) |
+| POST | `/discrepancies/{id}/resolve/` | `{resolution_note}` (branch manager, finance, admin) |
+
 **Visibility:** agents see only their assigned customers and their loans, branch managers see their branch, and admin and finance see everything. Out-of-scope records return 404.
 
 ## Database
@@ -117,6 +123,9 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | `lending_installment` | EMI schedule: `seq`, `due_date`, `amount_due`, `amount_paid`, status. `UNIQUE(loan, seq)`, `CHECK 0 <= amount_paid <= amount_due` |
 
 | `cash_collection` | Cash repayments: loan, agent, amount, status (`COLLECTED → SUBMITTED → BRANCH_RECEIVED → DEPOSITED → SETTLED`), `idempotency_key` unique. Receipt number is `RC` + date + id |
+| `cash_cashsubmission` | Agent → branch cash handovers: `expected_amount` (sum of collections), `received_amount`, status `PENDING / APPROVED / REJECTED`, remarks, reviewer |
+| `cash_cashsubmission_collections` | Which collections are in each submission. Many-to-many, so rejected submissions keep their history |
+| `cash_discrepancy` | `SHORT / EXCESS / BANK_MISMATCH`: expected, actual, `difference = expected − actual`, note, `OPEN / RESOLVED` |
 
 All money columns are `NUMERIC(14,2)`.
 
@@ -126,6 +135,13 @@ All money columns are `NUMERIC(14,2)`.
 - **Over-collection:** an amount above the total outstanding is rejected, and the error states the excess.
 - **Duplicate collection:** each payment form sends a unique `idempotency_key`, and a retry returns the original receipt (`200`) instead of creating a second payment.
 - Only the customer's assigned agent can collect. Collections can never be edited or deleted (`405`).
+
+### Branch reconciliation rules
+
+- The agent submits **all** the cash they hold in one go. The expected amount is calculated on the server.
+- The manager enters the cash actually counted. A difference is recorded as a SHORT or EXCESS discrepancy (remarks required), and only the received amount moves on to the bank.
+- Rejecting needs a reason. The collections go back to the agent, who can resubmit.
+- An approved or rejected submission is locked: it can't be reviewed again or edited (`405`), and every action is audit-logged.
 
 ### Loan schedule (flat interest)
 

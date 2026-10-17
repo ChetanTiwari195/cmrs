@@ -4,12 +4,20 @@ import { useAuth } from '@/lib/auth'
 import { NAV } from '@/lib/nav'
 import Collections from '@/pages/Collections'
 import Customers from '@/pages/Customers'
+import Discrepancies from '@/pages/Discrepancies'
 import LoanDetail from '@/pages/LoanDetail'
 import Loans from '@/pages/Loans'
 import Login from '@/pages/Login'
 import Placeholder from '@/pages/Placeholder'
+import Submissions from '@/pages/Submissions'
 
-const PAGES = { '/customers': Customers, '/loans': Loans, '/collections': Collections }
+const PAGES = {
+  '/customers': Customers,
+  '/loans': Loans,
+  '/collections': Collections,
+  '/submissions': Submissions,
+  '/discrepancies': Discrepancies,
+}
 
 export default function App() {
   const { user, loading } = useAuth()

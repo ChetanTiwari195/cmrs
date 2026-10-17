@@ -19,3 +19,8 @@ export const STATUS_VARIANT = {
 }
 
 export const label = (status) => status.replaceAll('_', ' ')
+
+Object.assign(STATUS_VARIANT, { APPROVED: 'default', REJECTED: 'destructive', OPEN: 'destructive', RESOLVED: 'secondary' })
+
+// Display-only preview of expected − received while the manager types; the API computes and stores the real figure.
+export const previewDifference = (expected, received) => (Math.round(expected * 100) - Math.round(received * 100)) / 100

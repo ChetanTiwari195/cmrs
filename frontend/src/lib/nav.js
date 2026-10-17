@@ -7,7 +7,7 @@ const discrepancies = { path: '/discrepancies', label: 'Discrepancies', icon: Al
 
 // Sidebar items per role. Pages are filled in by later PRs.
 export const NAV = {
-  ADMIN: [dashboard, { path: '/customers', label: 'Customers', icon: Users }, loans, collections],
+  ADMIN: [dashboard, { path: '/customers', label: 'Customers', icon: Users }, loans, collections, discrepancies],
   AGENT: [
     dashboard,
     { path: '/customers', label: 'My Customers', icon: Users },
