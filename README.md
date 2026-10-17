@@ -58,7 +58,7 @@ Open http://localhost:5173.
 | Variable | Required | Description |
 |---|---|---|
 | `SECRET_KEY` | yes | Django secret key (long random string) |
-| `DATABASE_URL` | yes | Neon connection string (`...?sslmode=require`) |
+| `DATABASE_URL` | yes | Neon **direct** connection string (pooling off; the pooler breaks `manage.py test`) |
 | `DEBUG` | no | `true` locally, `false` in production (default `false`) |
 | `ALLOWED_HOSTS` | no | Comma-separated API hostnames (default `localhost,127.0.0.1`) |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend URLs (default `http://localhost:5173`) |
