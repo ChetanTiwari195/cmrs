@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
@@ -53,3 +54,18 @@ export function errorMessage(error) {
 }
 
 export default api
+
+export function useApi(url) {
+  const [state, setState] = useState({ data: null, loading: true, error: null })
+  const [version, setVersion] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    api.get(url)
+      .then((res) => active && setState({ data: res.data, loading: false, error: null }))
+      .catch((error) => active && setState({ data: null, loading: false, error: errorMessage(error) }))
+    return () => { active = false }
+  }, [url, version])
+
+  return { ...state, reload: () => setVersion((v) => v + 1) }
+}

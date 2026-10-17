@@ -83,6 +83,8 @@ Created by `manage.py seed_demo`. Password for all: `Demo@12345`.
 | `manager_mum` | Branch Manager | MUM01 Mumbai Andheri |
 | `agent_mum` | Collection Agent | MUM01 Mumbai Andheri |
 
+The seed also creates 4 customers with one loan each: 2 per agent.
+
 ## API
 
 All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token>` except login and refresh. Full docs at `/api/docs/`.
@@ -92,6 +94,13 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | POST | `/auth/login/` | `{username, password}` → `{access, refresh}` |
 | POST | `/auth/refresh/` | `{refresh}` → `{access}` |
 | GET | `/auth/me/` | Current user with role and branch |
+| GET | `/agents/` | Active collection agents (admin only) |
+| GET, POST | `/customers/` | List (scoped by role) / create (admin) |
+| GET, PATCH | `/customers/{id}/` | Detail / update (admin) |
+| GET, POST | `/loans/` | List with `amount_paid` and `outstanding` / create with auto-generated schedule (admin) |
+| GET | `/loans/{id}/` | Loan detail with its installments |
+
+**Visibility:** agents see only their assigned customers and their loans, branch managers see their branch, and admin and finance see everything. Out-of-scope records return 404.
 
 ## Database
 
@@ -100,6 +109,18 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | `accounts_branch` | Branches (`code` unique) |
 | `accounts_user` | Users with `role` and `branch` (branch required for managers and agents) |
 | `audit_auditlog` | Append-only log of who changed what (`before` / `after` JSON) |
+| `lending_customer` | Customers (`phone` unique), with branch and assigned agent |
+| `lending_loan` | Loans: principal, flat annual rate, tenure, `total_interest`, `total_payable`, status. Loan number is `LN` + zero-padded id |
+| `lending_installment` | EMI schedule: `seq`, `due_date`, `amount_due`, `amount_paid`, status. `UNIQUE(loan, seq)`, `CHECK 0 <= amount_paid <= amount_due` |
+
+All money columns are `NUMERIC(14,2)`.
+
+### Loan schedule (flat interest)
+
+- Total interest = principal × annual rate × tenure months / 1200
+- EMI = (principal + interest) / tenure, rounded down to the paisa
+- The last EMI takes the rounding remainder, so the schedule always adds up exactly to the total payable
+- EMIs are monthly. The first one is due one month after disbursement (clamped to month end, e.g. Jan 31 → Feb 28)
 
 ## Deployment
 
