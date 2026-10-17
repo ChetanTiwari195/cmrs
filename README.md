@@ -95,7 +95,9 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | POST | `/auth/login/` | `{username, password}` → `{access, refresh}` |
 | POST | `/auth/refresh/` | `{refresh}` → `{access}` |
 | GET | `/auth/me/` | Current user with role and branch |
-| GET | `/agents/` | Active collection agents (admin only) |
+| GET | `/branches/` | All branches |
+| GET | `/agents/` | Active collection agents (admin, finance; managers see their branch) |
+| GET | `/dashboard/` | Totals for `date_from`, `date_to`, `branch`, `agent`: expected, collected, with agents, received at branch, deposited, settled, outstanding, open discrepancies, pending deposits, plus a by-agent breakdown |
 | GET, POST | `/customers/` | List (scoped by role) / create (admin) |
 | GET, PATCH | `/customers/{id}/` | Detail / update (admin) |
 | GET, POST | `/loans/` | List with `amount_paid` and `outstanding` / create with auto-generated schedule (admin) |
@@ -113,6 +115,8 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | POST | `/deposits/{id}/fail/` | `{remarks}`. The cash goes back to the branch for a new deposit (finance) |
 | GET | `/discrepancies/` | List (filters: `status`, `type`, `branch`) |
 | POST | `/discrepancies/{id}/resolve/` | `{resolution_note}` (branch manager, finance, admin) |
+
+**Filtering:** the dashboard filters by date, branch and agent. The collections, submissions, deposits and discrepancies lists filter by status.
 
 **Visibility:** agents see only their assigned customers and their loans, branch managers see their branch, and admin and finance see everything. Out-of-scope records return 404.
 

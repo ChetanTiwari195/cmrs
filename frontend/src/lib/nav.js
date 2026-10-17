@@ -5,7 +5,7 @@ const loans = { path: '/loans', label: 'Loans', icon: FileText }
 const collections = { path: '/collections', label: 'Collections', icon: Wallet }
 const discrepancies = { path: '/discrepancies', label: 'Discrepancies', icon: AlertTriangle }
 
-// Sidebar items per role. Pages are filled in by later PRs.
+// Sidebar items per role. A role can only open the pages listed here.
 export const NAV = {
   ADMIN: [dashboard, { path: '/customers', label: 'Customers', icon: Users }, loans, collections, discrepancies],
   AGENT: [

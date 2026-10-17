@@ -92,6 +92,7 @@ class ApiTests(TestCase):
         self.assertEqual(client.post("/api/v1/customers/", {"name": "X", "phone": "9800000001", "assigned_agent": User.objects.get(username="agent_blr").id}).status_code, 400)
         self.assertEqual(client.post("/api/v1/customers/", {"name": "X", "phone": "12345", "assigned_agent": manager.id}).status_code, 400)
 
-    def test_agents_endpoint_admin_only(self):
-        self.assertEqual(self.client_for("admin").get("/api/v1/agents/").status_code, 200)
+    def test_agents_endpoint(self):
+        self.assertEqual(len(self.client_for("admin").get("/api/v1/agents/").data), 2)
+        self.assertEqual([a["name"] for a in self.client_for("manager_blr").get("/api/v1/agents/").data], ["Arjun"])
         self.assertEqual(self.client_for("agent_blr").get("/api/v1/agents/").status_code, 403)
