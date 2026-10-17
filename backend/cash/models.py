@@ -70,6 +70,40 @@ class CashSubmission(models.Model):
         return self.ref_no
 
 
+class BankDeposit(models.Model):
+    """Reconciled branch cash paid into the bank, later confirmed (or failed) by finance."""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING"  # deposited, waiting for the bank to settle
+        SETTLED = "SETTLED"
+        FAILED = "FAILED"
+
+    branch = models.ForeignKey("accounts.Branch", on_delete=models.PROTECT, related_name="deposits")
+    # Many-to-many so a failed deposit keeps its history when the same submissions are deposited again.
+    submissions = models.ManyToManyField(CashSubmission, related_name="deposits")
+    bank_name = models.CharField(max_length=100)
+    reference = models.CharField(max_length=50)
+    amount = models.DecimalField(**MONEY)
+    deposit_date = models.DateField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    settled_amount = models.DecimalField(**MONEY, null=True, blank=True)
+    settled_on = models.DateField(null=True, blank=True)
+    remarks = models.TextField(blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-deposit_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["bank_name", "reference"], name="unique_bank_reference"),
+            models.CheckConstraint(condition=Q(amount__gt=0), name="deposit_amount_positive"),
+        ]
+
+    def __str__(self):
+        return f"{self.bank_name} {self.reference}"
+
+
 class Discrepancy(models.Model):
     """A recorded difference between what was expected and what actually arrived."""
 
@@ -85,6 +119,7 @@ class Discrepancy(models.Model):
     type = models.CharField(max_length=20, choices=Type.choices)
     branch = models.ForeignKey("accounts.Branch", on_delete=models.PROTECT, related_name="discrepancies")
     submission = models.ForeignKey(CashSubmission, null=True, blank=True, on_delete=models.PROTECT, related_name="discrepancies")
+    deposit = models.ForeignKey(BankDeposit, null=True, blank=True, on_delete=models.PROTECT, related_name="discrepancies")
     expected = models.DecimalField(**MONEY)
     actual = models.DecimalField(**MONEY)
     difference = models.DecimalField(**MONEY, help_text="expected - actual; positive means money is missing")

@@ -5,13 +5,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import User
-from accounts.permissions import IsAgent, IsBranchManager, has_role
+from accounts.permissions import IsAgent, IsBranchManager, IsFinance, has_role
 
 from . import services
 from .filters import CollectionFilter
-from .models import CashSubmission, Collection, Discrepancy
+from .models import BankDeposit, CashSubmission, Collection, Discrepancy
 from .serializers import (
-    ApproveSerializer, CashSubmissionSerializer, CollectionSerializer, DiscrepancySerializer, RemarksSerializer,
+    ApproveSerializer, BankDepositSerializer, SettleSerializer, CashSubmissionSerializer, CollectionSerializer, DiscrepancySerializer, RemarksSerializer,
     ResolveSerializer,
 )
 
@@ -97,7 +97,7 @@ class DiscrepancyViewSet(viewsets.ReadOnlyModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = Discrepancy.objects.select_related("branch", "submission", "resolved_by")
+        qs = Discrepancy.objects.select_related("branch", "submission", "deposit", "resolved_by")
         return scope(qs, self.request.user, agent_field="submission__agent")
 
     @action(detail=True, methods=["post"])
@@ -105,4 +105,48 @@ class DiscrepancyViewSet(viewsets.ReadOnlyModelViewSet):
         data = ResolveSerializer(data=request.data)
         data.is_valid(raise_exception=True)
         services.resolve_discrepancy(request.user, self.get_object().pk, data.validated_data["resolution_note"])
+        return Response(self.get_serializer(self.get_object()).data)
+
+
+class BankDepositViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
+    """Managers deposit reconciled cash; finance settles or fails it. No edits."""
+
+    serializer_class = BankDepositSerializer
+    filterset_fields = ["status", "branch"]
+
+    def get_permissions(self):
+        if self.action in ("create", "eligible"):
+            return [IsBranchManager()]
+        if self.action in ("settle", "fail"):
+            return [IsFinance()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        qs = BankDeposit.objects.select_related("branch").prefetch_related("submissions")
+        if self.request.user.role == User.Role.AGENT:
+            return qs.none()
+        return scope(qs, self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.instance = services.create_deposit(self.request.user, **serializer.validated_data)
+
+    @action(detail=False)
+    def eligible(self, request):
+        """Reconciled cash the manager's branch can deposit right now."""
+        submissions = services.depositable_submissions(request.user.branch_id)
+        totals = submissions.aggregate(total=Sum("received_amount"), count=Count("id"))
+        return Response({"total": totals["total"] or "0.00", "count": totals["count"], "refs": [s.ref_no for s in submissions]})
+
+    @action(detail=True, methods=["post"])
+    def settle(self, request, pk=None):
+        data = SettleSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        services.settle_deposit(request.user, self.get_object().pk, **data.validated_data)
+        return Response(self.get_serializer(self.get_object()).data)
+
+    @action(detail=True, methods=["post"])
+    def fail(self, request, pk=None):
+        data = RemarksSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        services.fail_deposit(request.user, self.get_object().pk, data.validated_data["remarks"])
         return Response(self.get_serializer(self.get_object()).data)

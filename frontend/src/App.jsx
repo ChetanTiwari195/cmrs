@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/auth'
 import { NAV } from '@/lib/nav'
 import Collections from '@/pages/Collections'
 import Customers from '@/pages/Customers'
+import Deposits from '@/pages/Deposits'
 import Discrepancies from '@/pages/Discrepancies'
 import LoanDetail from '@/pages/LoanDetail'
 import Loans from '@/pages/Loans'
@@ -17,6 +18,8 @@ const PAGES = {
   '/collections': Collections,
   '/submissions': Submissions,
   '/discrepancies': Discrepancies,
+  '/deposits': Deposits,
+  '/settlements': Deposits,
 }
 
 export default function App() {

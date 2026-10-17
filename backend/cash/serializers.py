@@ -1,8 +1,10 @@
 from decimal import Decimal
 
+from django.conf import settings
+from django.utils import timezone
 from rest_framework import serializers
 
-from .models import CashSubmission, Collection, Discrepancy
+from .models import BankDeposit, CashSubmission, Collection, Discrepancy
 
 
 class CollectionSerializer(serializers.ModelSerializer):
@@ -73,6 +75,8 @@ class DiscrepancySerializer(serializers.ModelSerializer):
         ]
 
     def get_reference(self, obj):
+        if obj.deposit_id:
+            return f"{obj.deposit.bank_name} {obj.deposit.reference}"
         return obj.submission.ref_no if obj.submission_id else None
 
     def get_resolved_by_name(self, obj):
@@ -81,3 +85,48 @@ class DiscrepancySerializer(serializers.ModelSerializer):
 
 class ResolveSerializer(serializers.Serializer):
     resolution_note = serializers.CharField(allow_blank=True)
+
+
+class BankDepositSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source="branch.name")
+    submission_refs = serializers.SerializerMethodField()
+    is_delayed = serializers.SerializerMethodField()
+    difference = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BankDeposit
+        fields = [
+            "id", "branch", "branch_name", "bank_name", "reference", "amount", "deposit_date", "status", "is_delayed",
+            "settled_amount", "settled_on", "difference", "remarks", "submission_refs", "created_at",
+        ]
+        read_only_fields = ["branch", "status", "settled_amount", "settled_on", "remarks"]
+        extra_kwargs = {"amount": {"min_value": Decimal("0.01")}}
+        # Uniqueness is checked in the service after normalising, so the message names the bank.
+        validators = []
+
+    def validate_bank_name(self, value):
+        return " ".join(value.split()).upper()
+
+    def validate_reference(self, value):
+        return value.strip().upper()
+
+    def validate_deposit_date(self, value):
+        if value > timezone.localdate():
+            raise serializers.ValidationError("Deposit date can't be in the future.")
+        return value
+
+    def get_submission_refs(self, obj):
+        return [s.ref_no for s in obj.submissions.all()]
+
+    def get_is_delayed(self, obj):
+        days = (timezone.localdate() - obj.deposit_date).days
+        return obj.status == BankDeposit.Status.PENDING and days > settings.SETTLEMENT_DELAY_DAYS
+
+    def get_difference(self, obj):
+        return None if obj.settled_amount is None else str(obj.amount - obj.settled_amount)
+
+
+class SettleSerializer(serializers.Serializer):
+    settled_amount = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=Decimal("0"))
+    settled_on = serializers.DateField()
+    remarks = serializers.CharField(required=False, allow_blank=True, default="")

@@ -7,7 +7,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from audit.models import log_action
 from lending.models import Installment, Loan
 
-from .models import CashSubmission, Collection, Discrepancy
+from .models import BankDeposit, CashSubmission, Collection, Discrepancy
 
 
 def collect_payment(agent, loan_id, amount, idempotency_key):
@@ -141,3 +141,88 @@ def resolve_discrepancy(user, discrepancy_id, resolution_note):
     discrepancy.save()
     log_action(user, "RESOLVE_DISCREPANCY", discrepancy, after={"note": resolution_note})
     return discrepancy
+
+
+ACTIVE_DEPOSIT = [BankDeposit.Status.PENDING, BankDeposit.Status.SETTLED]
+
+
+def depositable_submissions(branch_id):
+    """Approved cash at the branch that isn't already in a pending or settled deposit."""
+    return CashSubmission.objects.filter(branch_id=branch_id, status=CashSubmission.Status.APPROVED).exclude(
+        deposits__status__in=ACTIVE_DEPOSIT
+    )
+
+
+@transaction.atomic
+def create_deposit(manager, bank_name, reference, amount, deposit_date):
+    """Deposit all reconciled cash of the manager's branch. The amount must match exactly."""
+    submissions = list(depositable_submissions(manager.branch_id).select_for_update(of=("self",)))
+    if not submissions:
+        raise ValidationError({"detail": "There is no reconciled cash to deposit."})
+    reconciled = sum((s.received_amount for s in submissions), Decimal(0))
+    if amount != reconciled:
+        raise ValidationError({
+            "amount": f"Deposit mismatch: ₹{amount} entered but the branch reconciled ₹{reconciled} (difference ₹{reconciled - amount}). Check the bank slip."
+        })
+    try:
+        with transaction.atomic():
+            deposit = BankDeposit.objects.create(
+                branch_id=manager.branch_id, bank_name=bank_name, reference=reference, amount=amount,
+                deposit_date=deposit_date, created_by=manager,
+            )
+    except IntegrityError:
+        raise ValidationError({"reference": f"Reference {reference} is already recorded for {bank_name}."})
+    deposit.submissions.set(submissions)
+    Collection.objects.filter(submissions__in=submissions, status=Collection.Status.BRANCH_RECEIVED).update(status=Collection.Status.DEPOSITED)
+    log_action(manager, "DEPOSIT", deposit, after={"bank": bank_name, "reference": reference, "amount": str(amount)})
+    return deposit
+
+
+def _get_pending_deposit(deposit_id):
+    deposit = BankDeposit.objects.select_for_update().get(pk=deposit_id)
+    if deposit.status != BankDeposit.Status.PENDING:
+        raise ValidationError({"status": f"This deposit is already {deposit.status.lower()}."})
+    return deposit
+
+
+def _deposit_collections(deposit):
+    return Collection.objects.filter(submissions__deposits=deposit, status=Collection.Status.DEPOSITED)
+
+
+@transaction.atomic
+def settle_deposit(user, deposit_id, settled_amount, settled_on, remarks):
+    deposit = _get_pending_deposit(deposit_id)
+    if not deposit.deposit_date <= settled_on <= timezone.localdate():
+        raise ValidationError({"settled_on": "Settlement date must be between the deposit date and today."})
+    difference = deposit.amount - settled_amount
+    if difference and not remarks.strip():
+        raise ValidationError({"remarks": "Remarks are required when the settled amount differs from the deposit."})
+    deposit.status = BankDeposit.Status.SETTLED
+    deposit.settled_amount = settled_amount
+    deposit.settled_on = settled_on
+    deposit.remarks = remarks
+    deposit.reviewed_by = user
+    deposit.save()
+    _deposit_collections(deposit).update(status=Collection.Status.SETTLED)
+    if difference:
+        Discrepancy.objects.create(
+            type=Discrepancy.Type.BANK_MISMATCH, branch=deposit.branch, deposit=deposit,
+            expected=deposit.amount, actual=settled_amount, difference=difference, note=remarks,
+        )
+    log_action(user, "SETTLE", deposit, after={"settled_amount": str(settled_amount), "settled_on": str(settled_on)})
+    return deposit
+
+
+@transaction.atomic
+def fail_deposit(user, deposit_id, remarks):
+    if not remarks.strip():
+        raise ValidationError({"remarks": "A reason is required to mark a deposit as failed."})
+    deposit = _get_pending_deposit(deposit_id)
+    deposit.status = BankDeposit.Status.FAILED
+    deposit.remarks = remarks
+    deposit.reviewed_by = user
+    deposit.save()
+    # The cash is back at the branch and can be deposited again with a new bank reference.
+    _deposit_collections(deposit).update(status=Collection.Status.BRANCH_RECEIVED)
+    log_action(user, "FAIL_DEPOSIT", deposit, after={"remarks": remarks})
+    return deposit

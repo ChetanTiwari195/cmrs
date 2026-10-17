@@ -24,3 +24,5 @@ Object.assign(STATUS_VARIANT, { APPROVED: 'default', REJECTED: 'destructive', OP
 
 // Display-only preview of expected − received while the manager types; the API computes and stores the real figure.
 export const previewDifference = (expected, received) => (Math.round(expected * 100) - Math.round(received * 100)) / 100
+
+Object.assign(STATUS_VARIANT, { FAILED: 'destructive' })

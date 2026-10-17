@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import CashSubmission, Collection, Discrepancy
+from .models import BankDeposit, CashSubmission, Collection, Discrepancy
 
 
 class ReadOnlyAdmin(admin.ModelAdmin):
@@ -32,3 +32,9 @@ class CashSubmissionAdmin(ReadOnlyAdmin):
 class DiscrepancyAdmin(ReadOnlyAdmin):
     list_display = ["type", "branch", "expected", "actual", "difference", "status", "created_at"]
     list_filter = ["type", "status", "branch"]
+
+
+@admin.register(BankDeposit)
+class BankDepositAdmin(ReadOnlyAdmin):
+    list_display = ["bank_name", "reference", "branch", "amount", "deposit_date", "status", "settled_amount"]
+    list_filter = ["status", "branch"]

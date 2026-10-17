@@ -103,6 +103,9 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
+# A pending bank deposit older than this many days is shown as delayed.
+SETTLEMENT_DELAY_DAYS = int(os.environ.get("SETTLEMENT_DELAY_DAYS", "2"))
+
 SPECTACULAR_SETTINGS = {"TITLE": "CMRS API", "VERSION": "1.0.0"}
 
 if not DEBUG:

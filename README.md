@@ -62,6 +62,7 @@ Open http://localhost:5173.
 | `DEBUG` | no | `true` locally, `false` in production (default `false`) |
 | `ALLOWED_HOSTS` | no | Comma-separated API hostnames (default `localhost,127.0.0.1`) |
 | `CORS_ALLOWED_ORIGINS` | no | Comma-separated frontend URLs (default `http://localhost:5173`) |
+| `SETTLEMENT_DELAY_DAYS` | no | Days after which an unsettled bank deposit is flagged delayed (default `2`) |
 | `DEMO_PASSWORD` | no | Password `seed_demo` gives every demo user (default `Demo@12345`) |
 
 ### Frontend (`frontend/.env`)
@@ -106,6 +107,10 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | GET, POST | `/submissions/` | List (filters: `status`, `agent`, `branch`) / submit all cash in hand to the branch (agent) |
 | POST | `/submissions/{id}/approve/` | `{received_amount, remarks}`. A difference creates a discrepancy, and remarks are then required (branch manager) |
 | POST | `/submissions/{id}/reject/` | `{remarks}`. The cash goes back to the agent, who can resubmit (branch manager) |
+| GET, POST | `/deposits/` | List (filters: `status`, `branch`) / deposit all reconciled branch cash: `{bank_name, reference, amount, deposit_date}` (branch manager) |
+| GET | `/deposits/eligible/` | Reconciled cash ready to deposit: `{total, count, refs}` (branch manager) |
+| POST | `/deposits/{id}/settle/` | `{settled_amount, settled_on, remarks}`. A difference creates a bank-mismatch discrepancy (finance) |
+| POST | `/deposits/{id}/fail/` | `{remarks}`. The cash goes back to the branch for a new deposit (finance) |
 | GET | `/discrepancies/` | List (filters: `status`, `type`, `branch`) |
 | POST | `/discrepancies/{id}/resolve/` | `{resolution_note}` (branch manager, finance, admin) |
 
@@ -125,6 +130,8 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | `cash_collection` | Cash repayments: loan, agent, amount, status (`COLLECTED → SUBMITTED → BRANCH_RECEIVED → DEPOSITED → SETTLED`), `idempotency_key` unique. Receipt number is `RC` + date + id |
 | `cash_cashsubmission` | Agent → branch cash handovers: `expected_amount` (sum of collections), `received_amount`, status `PENDING / APPROVED / REJECTED`, remarks, reviewer |
 | `cash_cashsubmission_collections` | Which collections are in each submission. Many-to-many, so rejected submissions keep their history |
+| `cash_bankdeposit` | Bank deposits: bank, reference, amount, date, status `PENDING / SETTLED / FAILED`, `settled_amount`, `settled_on`. `UNIQUE(bank_name, reference)` |
+| `cash_bankdeposit_submissions` | Which approved submissions each deposit covers |
 | `cash_discrepancy` | `SHORT / EXCESS / BANK_MISMATCH`: expected, actual, `difference = expected − actual`, note, `OPEN / RESOLVED` |
 
 All money columns are `NUMERIC(14,2)`.
@@ -142,6 +149,14 @@ All money columns are `NUMERIC(14,2)`.
 - The manager enters the cash actually counted. A difference is recorded as a SHORT or EXCESS discrepancy (remarks required), and only the received amount moves on to the bank.
 - Rejecting needs a reason. The collections go back to the agent, who can resubmit.
 - An approved or rejected submission is locked: it can't be reviewed again or edited (`405`), and every action is audit-logged.
+
+### Bank deposit and settlement rules
+
+- The manager deposits **all** reconciled cash at the branch. The amount entered must equal the reconciled total; otherwise it's rejected as a deposit mismatch.
+- **Duplicate bank reference:** bank and reference are trimmed and uppercased, then must be unique (`HDFC Bank / utr-9` = `HDFC BANK / UTR-9`).
+- Finance settles with the amount actually credited. A difference creates a `BANK_MISMATCH` discrepancy (remarks required).
+- **Failed settlement:** a failed deposit returns its cash to the branch, which deposits it again with a new reference.
+- **Delayed settlement:** a pending deposit older than `SETTLEMENT_DELAY_DAYS` (default 2) is flagged `DELAYED`. It's computed on read, so no background job is needed.
 
 ### Loan schedule (flat interest)
 
