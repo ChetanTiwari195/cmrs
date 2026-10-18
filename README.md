@@ -33,7 +33,7 @@ Installment due (Expected)
 
 | Role | Scope | Does |
 |---|---|---|
-| Admin | Everything | Manages customers and loans in the app; branches and users in Django admin |
+| Admin | Everything | Adds agents, customers and loans in the app; branches and other users in Django admin |
 | Finance | All branches | Settles or fails bank deposits, resolves discrepancies |
 | Branch Manager | Own branch | Counts and approves/rejects agent cash, records bank deposits, resolves discrepancies |
 | Collection Agent | Assigned customers | Records repayments, submits cash in hand to the branch |
@@ -172,7 +172,7 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | POST | `/auth/refresh/` | `{refresh}` → `{access}` |
 | GET | `/auth/me/` | Current user with role and branch |
 | GET | `/branches/` | All branches |
-| GET | `/agents/` | Active collection agents (admin, finance; managers see their branch) |
+| GET, POST | `/agents/` | Active collection agents (admin, finance; managers see their branch) / add an agent: `{username, first_name, last_name, password, branch}` (admin) |
 | GET | `/dashboard/` | Totals for `date_from`, `date_to`, `branch`, `agent`: expected, collected, with agents, received at branch, deposited, settled, outstanding, open discrepancies, pending deposits, and a by-agent breakdown |
 | GET, POST | `/customers/` | List (scoped by role) / create (admin) |
 | GET, PATCH | `/customers/{id}/` | Detail / update (admin) |

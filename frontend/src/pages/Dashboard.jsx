@@ -1,11 +1,16 @@
+import { UserPlus } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Figure, LoadingRows } from '@/components/Loading'
+import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useApi } from '@/lib/api'
+import api, { errorMessage, useApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { formatINR, todayISO } from '@/lib/utils'
 
@@ -28,11 +33,22 @@ export default function Dashboard() {
   const [filters, setFilters] = useState({ date_from: monthStart(), date_to: todayISO(), branch: 'ALL', agent: 'ALL' })
   const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v && v !== 'ALL'))
   const { data, loading, error } = useApi(`/dashboard/?${params}`)
+  const [addingAgent, setAddingAgent] = useState(false)
+  const [agentsVersion, setAgentsVersion] = useState(0) // remounts the agent filter so a new agent shows up
   const set = (key) => (value) => setFilters((f) => ({ ...f, [key]: value?.target ? value.target.value : value }))
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Dashboard</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Dashboard</h1>
+        {user.role === 'ADMIN' && (
+          <Button onClick={() => setAddingAgent(true)}><UserPlus /> Add agent</Button>
+        )}
+      </div>
+
+      {addingAgent && (
+        <AddAgentDialog onClose={() => setAddingAgent(false)} onAdded={() => { setAddingAgent(false); setAgentsVersion((v) => v + 1) }} />
+      )}
 
       <div className="grid grid-cols-2 items-end gap-3 sm:flex sm:flex-wrap sm:gap-4">
         <div className="space-y-2">
@@ -44,7 +60,7 @@ export default function Dashboard() {
           <Input id="date_to" type="date" value={filters.date_to} onChange={set('date_to')} />
         </div>
         {seesAll && <BranchFilter value={filters.branch} onChange={set('branch')} />}
-        {user.role !== 'AGENT' && <AgentFilter value={filters.agent} onChange={set('agent')} />}
+        {user.role !== 'AGENT' && <AgentFilter key={agentsVersion} value={filters.agent} onChange={set('agent')} />}
       </div>
 
       {error && <p className="text-destructive">{error}</p>}
@@ -140,5 +156,68 @@ function AgentFilter({ value, onChange }) {
         </SelectContent>
       </Select>
     </div>
+  )
+}
+
+function AddAgentDialog({ onClose, onAdded }) {
+  const { data: branches } = useApi('/branches/')
+  const [saving, setSaving] = useState(false)
+
+  async function onSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const { data: agent } = await api.post('/agents/', Object.fromEntries(new FormData(e.currentTarget)))
+      toast.success(`${agent.name} added to ${agent.branch}. They can log in now.`)
+      onAdded()
+    } catch (err) {
+      toast.error(errorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add collection agent</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="first_name">First name</Label>
+              <Input id="first_name" name="first_name" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="last_name">Last name</Label>
+              <Input id="last_name" name="last_name" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" name="username" autoComplete="off" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Branch</Label>
+            <Select name="branch" required>
+              <SelectTrigger className="w-full"><SelectValue placeholder="Select a branch" /></SelectTrigger>
+              <SelectContent>
+                {branches?.map((b) => <SelectItem key={b.id} value={b.id.toString()}>{b.code} · {b.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground">At least 8 characters, not too common and not all numbers.</p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={saving}>{saving && <Spinner />} Add agent</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

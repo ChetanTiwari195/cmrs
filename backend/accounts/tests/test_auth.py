@@ -74,3 +74,35 @@ class AuditLogTests(TestCase):
         with self.assertRaises(ValueError):
             entry.delete()
         self.assertEqual(AuditLog.objects.count(), 1)
+
+
+class AddAgentTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.branch = Branch.objects.create(code="T1", name="Test")
+        cls.admin = User.objects.create_user("boss", role=User.Role.ADMIN)
+        cls.manager = User.objects.create_user("mgr", role=User.Role.BRANCH_MANAGER, branch=cls.branch)
+
+    def post(self, user, **overrides):
+        client = APIClient()
+        client.force_authenticate(user)
+        body = {"username": "agent_new", "first_name": "Kiran", "last_name": "Rao", "password": "Field@2026", "branch": self.branch.id, **overrides}
+        return client.post("/api/v1/agents/", body)
+
+    def test_admin_adds_agent_who_can_log_in(self):
+        res = self.post(self.admin)
+        self.assertEqual(res.status_code, 201, res.data)
+        self.assertEqual(res.data, {"id": res.data["id"], "name": "Kiran Rao", "branch": "Test"})
+        agent = User.objects.get(username="agent_new")
+        self.assertEqual((agent.role, agent.branch_id), (User.Role.AGENT, self.branch.id))
+        login = self.client.post("/api/v1/auth/login/", {"username": "agent_new", "password": "Field@2026"})
+        self.assertEqual(login.status_code, 200)
+        self.assertTrue(AuditLog.objects.filter(action="CREATE_AGENT", entity_id=str(agent.id)).exists())
+
+    def test_only_admin_can_add(self):
+        self.assertEqual(self.post(self.manager).status_code, 403)
+
+    def test_validation(self):
+        self.post(self.admin)
+        for bad in [{"username": "agent_new"}, {"password": "12345678"}, {"branch": ""}, {"first_name": ""}]:
+            self.assertEqual(self.post(self.admin, **{"username": "other", **bad}).status_code, 400, bad)
