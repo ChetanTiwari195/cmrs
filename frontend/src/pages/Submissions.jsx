@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { toast } from 'sonner'
 import { Figure, LoadingRows } from '@/components/Loading'
 import {
@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import api, { errorMessage, useApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -23,7 +23,9 @@ export default function Submissions() {
   const { user } = useAuth()
   const isAgent = user.role === 'AGENT'
   const [status, setStatus] = useState(isAgent ? 'ALL' : 'PENDING')
-  const { data: submissions, loading, error, reload } = useApi(`/submissions/${status === 'ALL' ? '' : `?status=${status}`}`)
+  const isManager = user.role === 'BRANCH_MANAGER'
+  const cols = isManager ? 8 : 7
+  const { data, loading, error, reload } = useApi(`/submissions/${status === 'ALL' ? '' : `?status=${status}`}`)
   const [reviewing, setReviewing] = useState(null)
 
   return (
@@ -47,50 +49,103 @@ export default function Submissions() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Ref</TableHead>
-            <TableHead className="hidden md:table-cell">Submitted</TableHead>
-            {!isAgent && <TableHead>Agent</TableHead>}
-            <TableHead className="hidden text-right lg:table-cell">Receipts</TableHead>
+            <TableHead>Ref / receipt</TableHead>
+            <TableHead className="hidden md:table-cell">Date</TableHead>
             <TableHead className="text-right">Expected</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Received</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Difference</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Remarks</TableHead>
-            {user.role === 'BRANCH_MANAGER' && <TableHead />}
+            {isManager && <TableHead />}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loading && <LoadingRows cols={isAgent ? 8 : 10} />}
-          {!loading && submissions?.map((s) => (
-            <TableRow key={s.id}>
-              <TableCell className="font-medium">{s.ref_no}</TableCell>
-              <TableCell className="hidden md:table-cell">{formatDateTime(s.created_at)}</TableCell>
-              {!isAgent && <TableCell>{s.agent_name}</TableCell>}
-              <TableCell className="hidden text-right lg:table-cell">{s.collection_count}</TableCell>
-              <TableCell className="text-right">{formatINR(s.expected_amount)}</TableCell>
-              <TableCell className="hidden text-right sm:table-cell">{formatINR(s.received_amount)}</TableCell>
-              <TableCell className={`hidden text-right sm:table-cell ${Number(s.difference) ? 'font-medium text-destructive' : ''}`}>{formatINR(s.difference)}</TableCell>
-              <TableCell><Badge variant={STATUS_VARIANT[s.status]}>{s.status}</Badge></TableCell>
-              <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">{s.remarks || '—'}</TableCell>
-              {user.role === 'BRANCH_MANAGER' && (
-                <TableCell className="text-right">
-                  {s.status === 'PENDING' && <Button size="sm" onClick={() => setReviewing(s)}>Review</Button>}
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-          {!loading && !submissions?.length && (
+          {loading && <LoadingRows cols={cols} />}
+          {/* Grouped by agent: each submission, its receipts underneath, then the agent's subtotal. */}
+          {!loading && data?.by_agent.map((group) => {
+            const submissions = data.results.filter((s) => s.agent === group.agent)
+            const name = submissions[0].agent_name
+            return (
+              <Fragment key={group.agent}>
+                {!isAgent && (
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableCell colSpan={cols} className="font-semibold">{name}</TableCell>
+                  </TableRow>
+                )}
+                {submissions.map((s) => (
+                  <Fragment key={s.id}>
+                    <TableRow>
+                      <TableCell className="font-medium">{s.ref_no}</TableCell>
+                      <TableCell className="hidden md:table-cell">{formatDateTime(s.created_at)}</TableCell>
+                      <TableCell className="text-right font-medium">{formatINR(s.expected_amount)}</TableCell>
+                      <TableCell className="hidden text-right sm:table-cell">{formatINR(s.received_amount)}</TableCell>
+                      <DifferenceCell value={s.difference} />
+                      <TableCell><Badge variant={STATUS_VARIANT[s.status]}>{s.status}</Badge></TableCell>
+                      <TableCell className="min-w-48 max-w-80 whitespace-normal break-words">{s.remarks || '—'}</TableCell>
+                      {isManager && (
+                        <TableCell className="text-right">
+                          {s.status === 'PENDING' && <Button size="sm" onClick={() => setReviewing(s)}>Review</Button>}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                    {s.receipts.map((r) => (
+                      <TableRow key={r.id} className="text-muted-foreground">
+                        <TableCell className="pl-6">
+                          {r.receipt_no}
+                          <div className="text-xs">{r.customer_name} · {r.loan_no}</div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">{formatDateTime(r.collected_at)}</TableCell>
+                        <TableCell className="text-right">{formatINR(r.amount)}</TableCell>
+                        <TableCell className="hidden sm:table-cell" />
+                        <TableCell className="hidden sm:table-cell" />
+                        <TableCell colSpan={isManager ? 3 : 2} />
+                      </TableRow>
+                    ))}
+                  </Fragment>
+                ))}
+                <TotalRow label={`${isAgent ? 'Total' : `${name} total`} · ${group.receipts} receipts`} totals={group} cols={cols} />
+              </Fragment>
+            )
+          })}
+          {!loading && !data?.results.length && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center text-muted-foreground">{error || 'No submissions.'}</TableCell>
+              <TableCell colSpan={cols} className="text-center text-muted-foreground">{error || 'No submissions.'}</TableCell>
             </TableRow>
           )}
         </TableBody>
+        {!isAgent && !loading && data?.results.length > 0 && (
+          <TableFooter>
+            <TotalRow label={`${user.branch?.name ?? 'All branches'} total · ${data.total.receipts} receipts`} totals={data.total} cols={cols} />
+          </TableFooter>
+        )}
       </Table>
 
       {reviewing && (
         <ReviewDialog submission={reviewing} onClose={() => setReviewing(null)} onDone={() => { setReviewing(null); reload() }} />
       )}
     </div>
+  )
+}
+
+function DifferenceCell({ value }) {
+  // Positive = cash short, negative = excess. Number() only decides the colour.
+  return (
+    <TableCell className={`hidden text-right sm:table-cell ${Number(value) ? 'font-medium text-destructive' : ''}`}>
+      {formatINR(value)}
+    </TableCell>
+  )
+}
+
+function TotalRow({ label, totals, cols }) {
+  return (
+    <TableRow className="font-semibold">
+      <TableCell>{label}</TableCell>
+      <TableCell className="hidden md:table-cell" />
+      <TableCell className="text-right">{formatINR(totals.expected)}</TableCell>
+      <TableCell className="hidden text-right sm:table-cell">{formatINR(totals.received)}</TableCell>
+      <DifferenceCell value={totals.difference} />
+      <TableCell colSpan={cols - 5} />
+    </TableRow>
   )
 }
 
@@ -163,13 +218,35 @@ function ReviewDialog({ submission, onClose, onDone }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Review {submission.ref_no} · {submission.agent_name}</DialogTitle>
         </DialogHeader>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Receipt</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {submission.receipts.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>{r.receipt_no}</TableCell>
+                <TableCell className="whitespace-normal">{r.customer_name} · {r.loan_no}</TableCell>
+                <TableCell className="text-right">{formatINR(r.amount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={2}>Expected total · {submission.collection_count} receipts</TableCell>
+              <TableCell className="text-right">{formatINR(submission.expected_amount)}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
         <dl className="grid grid-cols-2 gap-y-1 text-sm">
-          <dt className="text-muted-foreground">Receipts</dt><dd>{submission.collection_count}</dd>
-          <dt className="text-muted-foreground">Expected</dt><dd className="font-medium">{formatINR(submission.expected_amount)}</dd>
           <dt className="text-muted-foreground">Difference</dt>
           <dd className={difference ? 'font-medium text-destructive' : ''}>
             {difference == null ? '—' : `${formatINR(Math.abs(difference))} ${difference > 0 ? 'short' : difference < 0 ? 'excess' : ''}`}

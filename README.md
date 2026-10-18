@@ -6,8 +6,8 @@ Tracks cash loan repayments through their whole life:
 
 At every step the app records who holds the money and how much, and flags any amount that goes missing or doesn't match.
 
-- **Live app:** _added after deployment_
-- **API docs (Swagger):** _added after deployment_ (`/api/docs/`)
+- **Live app:** https://cmrs-ruby.vercel.app
+- **API docs (Swagger):** https://cmrs-hrw2.onrender.com/api/docs
 
 | Part | Stack |
 |---|---|
@@ -180,7 +180,7 @@ All endpoints are under `/api/v1/` and need `Authorization: Bearer <access token
 | GET | `/loans/{id}/` | Loan detail with its installments |
 | GET, POST | `/collections/` | List with `total` and `count` (filters: `date_from`, `date_to`, `status`, `loan`, `agent`) / record a cash repayment (agent) |
 | GET | `/collections/{id}/` | Collection with its receipt number |
-| GET, POST | `/submissions/` | List (filters: `status`, `agent`, `branch`) / submit all cash in hand to the branch (agent) |
+| GET, POST | `/submissions/` | List: `{results, by_agent, total}`, where each submission includes its receipts and the totals are expected/received/difference per agent and overall (filters: `status`, `agent`, `branch`) / submit all cash in hand to the branch (agent) |
 | POST | `/submissions/{id}/approve/` | `{received_amount, remarks}`. A difference creates a discrepancy, and remarks are then required (branch manager) |
 | POST | `/submissions/{id}/reject/` | `{remarks}`. The cash goes back to the agent, who can resubmit (branch manager) |
 | GET, POST | `/deposits/` | List (filters: `status`, `branch`) / deposit all reconciled branch cash: `{bank_name, reference, amount, deposit_date}` (branch manager) |

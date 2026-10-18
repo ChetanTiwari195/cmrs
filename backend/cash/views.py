@@ -1,4 +1,5 @@
-from django.db.models import Count, Sum
+from django.db.models import Count, DecimalField, F, Prefetch, Q, Sum, Value
+from django.db.models.functions import Coalesce
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -65,8 +66,34 @@ class CashSubmissionViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewS
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = CashSubmission.objects.select_related("agent", "branch", "reviewed_by").annotate(collection_count=Count("collections"))
+        receipts = Prefetch("collections", Collection.objects.select_related("loan__customer").order_by("collected_at"))
+        qs = (
+            CashSubmission.objects.select_related("agent", "branch", "reviewed_by")
+            .prefetch_related(receipts)
+            .annotate(collection_count=Count("collections"))
+        )
         return scope(qs, self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        """Submissions with their receipts, plus totals per agent and for everything shown."""
+        qs = self.filter_queryset(self.get_queryset())
+        # Aggregate on a plain queryset: the receipt-count annotation in get_queryset would multiply the sums.
+        plain = CashSubmission.objects.filter(pk__in=qs.values("pk"))
+        zero = Value(0, output_field=DecimalField(max_digits=14, decimal_places=2))
+        sums = {
+            "expected": Coalesce(Sum("expected_amount"), zero),
+            "received": Coalesce(Sum("received_amount"), zero),
+            # Only reviewed submissions have a received amount to compare against.
+            "difference": Coalesce(Sum(F("expected_amount") - F("received_amount"), filter=Q(received_amount__isnull=False)), zero),
+        }
+        # Receipts are counted separately; joining them into the sums above would multiply the amounts.
+        receipts = dict(plain.values_list("agent").annotate(n=Count("collections")))
+        by_agent = [{**row, "receipts": receipts[row["agent"]]} for row in plain.values("agent").annotate(**sums).order_by("agent")]
+        return Response({
+            "results": self.get_serializer(qs, many=True).data,
+            "by_agent": by_agent,
+            "total": {**plain.aggregate(**sums), "receipts": sum(receipts.values())},
+        })
 
     def create(self, request):
         submission = services.submit_cash(request.user)

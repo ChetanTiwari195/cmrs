@@ -28,8 +28,19 @@ def display_name(user):
     return (user.get_full_name() or user.username) if user else None
 
 
+class ReceiptSerializer(serializers.ModelSerializer):
+    receipt_no = serializers.ReadOnlyField()
+    loan_no = serializers.ReadOnlyField(source="loan.loan_no")
+    customer_name = serializers.ReadOnlyField(source="loan.customer.name")
+
+    class Meta:
+        model = Collection
+        fields = ["id", "receipt_no", "loan_no", "customer_name", "amount", "collected_at"]
+
+
 class CashSubmissionSerializer(serializers.ModelSerializer):
     ref_no = serializers.ReadOnlyField()
+    receipts = ReceiptSerializer(source="collections", many=True, read_only=True)
     agent_name = serializers.SerializerMethodField()
     reviewed_by_name = serializers.SerializerMethodField()
     branch_name = serializers.ReadOnlyField(source="branch.name")
@@ -40,7 +51,7 @@ class CashSubmissionSerializer(serializers.ModelSerializer):
         model = CashSubmission
         fields = [
             "id", "ref_no", "agent", "agent_name", "branch", "branch_name", "collection_count", "expected_amount",
-            "received_amount", "difference", "status", "remarks", "reviewed_by_name", "reviewed_at", "created_at",
+            "received_amount", "difference", "status", "remarks", "reviewed_by_name", "reviewed_at", "created_at", "receipts",
         ]
 
     def get_agent_name(self, obj):

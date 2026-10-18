@@ -84,3 +84,24 @@ class SubmissionTests(Fixtures, TestCase):
         self.assertEqual(res.data["status"], "RESOLVED")
         self.assertEqual(self.api(self.agent).post(f"/api/v1/discrepancies/{did}/resolve/", {"resolution_note": "x"}).status_code, 403)
         self.assertEqual(self.api(self.other_manager).get("/api/v1/discrepancies/").data, [])
+
+
+class SubmissionListTests(Fixtures, TestCase):
+    def test_list_shows_receipts_and_totals_per_agent(self):
+        self.collect("3000")
+        self.collect("2000")
+        sid = self.api(self.agent).post("/api/v1/submissions/").data["id"]
+        self.api(self.manager).post(f"/api/v1/submissions/{sid}/approve/", {"received_amount": "4850", "remarks": "short"})
+        self.collect("700")
+        self.api(self.agent).post("/api/v1/submissions/")
+
+        data = self.api(self.manager).get("/api/v1/submissions/").data
+        approved = next(s for s in data["results"] if s["id"] == sid)
+        self.assertEqual([r["amount"] for r in approved["receipts"]], ["3000.00", "2000.00"])
+        self.assertTrue(approved["receipts"][0]["receipt_no"].startswith("RC"))
+        self.assertEqual(data["by_agent"], [{
+            "agent": self.agent.id, "expected": Decimal("5700"), "received": Decimal("4850"),
+            "difference": Decimal("150"), "receipts": 3,
+        }])
+        self.assertEqual(data["total"]["expected"], Decimal("5700"))
+        self.assertEqual(self.api(self.other_manager).get("/api/v1/submissions/").data["total"]["receipts"], 0)
